@@ -63,8 +63,8 @@ def adjust_basal_insulin(glucose_level, weight, Kp, Ki, Kd, previous_glucose, cu
     adjusted_basal_rate = hourly_basal_rate + adjustment_factor_proportional + adjustment_factor_integral + adjustment_factor_derivative
 
     # Apply limits to the basal rate to prevent it from becoming too low or too high
-    min_basal_rate = 0.3
-    max_basal_rate = 3
+    min_basal_rate = 0
+    max_basal_rate = 4
     adjusted_basal_rate = max(min_basal_rate, min(adjusted_basal_rate, max_basal_rate))
 
 
