@@ -1,0 +1,12 @@
+Test Case [1]
+Body Weight: 75.75 kg
+Simulation Time: 3500 minutes
+
+Meal Count: 3
+Meal 1 Time: 1500 minutes, Carb Amount: 20.0 grams
+Meal 2 Time: 2250 minutes, Carb Amount: 75.0 grams
+Meal 3 Time: 2800 minutes, Carb Amount: 40.0 grams
+
+Exercise Sessions:
+
+
