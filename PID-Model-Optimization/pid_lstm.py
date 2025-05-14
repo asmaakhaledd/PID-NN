@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 
 class InsulinSimulator:
-    def __init__(self, model_path, test_case_path):
+    def __init__(self, model_path, test_case_path, totalSimulationTimeInNs):
         """
         Initializes the insulin simulation with the model and test case data.
         
@@ -18,7 +18,10 @@ class InsulinSimulator:
         self.model = self.load_model(model_path)
         
         # Parse the test case file for weight, simulation time, and meal schedules
-        self.weight, self.sim_time, self.meals = self.parse_test_case(test_case_path)
+        self.weight, self.meals = self.parse_test_case(test_case_path)
+        
+        # Convert simulation time from nanoseconds to seconds
+        self.sim_time= totalSimulationTimeInNs/10**9
         
         # Store the meal schedule in a dictionary for fast lookups based on time
         self.meal_schedule = {time: carbs for time, carbs in self.meals}
@@ -64,9 +67,6 @@ class InsulinSimulator:
             if "Body Weight" in line:
                 # Extract body weight from the file
                 weight = float(line.strip().split(':')[1].split()[0])
-            elif "Simulation Time" in line:
-                # Extract simulation time from the file
-                sim_time = int(line.strip().split(':')[1].split()[0])
             elif "Meal" in line and "Time" in line:
                 # Extract meal time and carbs from the file
                 parts = line.strip().split(',')
@@ -74,8 +74,8 @@ class InsulinSimulator:
                 carbs = float(parts[1].split(':')[1].strip().split()[0])
                 meals.append((time, carbs))
 
-        # Return weight, simulation time, and meals as a tuple
-        return weight, sim_time, meals
+        # Return weight, and meals as a tuple
+        return weight, meals
 
     def initialize_state(self):
         """
@@ -105,15 +105,30 @@ class InsulinSimulator:
     def should_deliver_insulin(self, glucose):
         """
         Determines if insulin should be delivered based on the current glucose level.
-        
+
         Args:
             glucose (float): The current glucose level.
-        
+
         Returns:
             bool: Whether insulin should be delivered.
         """
-        # Insulin should not be delivered if glucose is outside the valid range or is an invalid reading (NaN)
-        return glucose > 50 and glucose <= 1000 and not math.isnan(glucose)
+        # Rule 1: Don't deliver insulin if the glucose sensor has failed
+        if glucose <= 0 or glucose > 1000:
+            print(f"Irregular reading detected (Glucose = {glucose}): Pausing insulin delivery.")
+            return False
+
+        # Rule 2: Do not deliver insulin if glucose < 50 mg/dL
+        if glucose < 50:
+            print(f"Hypoglycemia detected (Glucose = {glucose}): Pausing insulin delivery.")
+            return False
+
+        # Rule 3: Missing or unreadable glucose value
+        if glucose is None or math.isnan(glucose):
+            print("No glucose reading available: Pausing insulin delivery.")
+            return False
+
+        # If all checks are passed, deliver insulin
+        return True
 
     def preprocess_time_features(self, timestep, glucose):
         """
@@ -269,50 +284,44 @@ class InsulinSimulator:
         return adjusted_basal_rate_per_minute
 
 
-    def run(self):
+    def run(self, glucose, currentTimeInNs):
         """Run the insulin simulation over the specified time."""
-        timestep = 1
+        timestep = currentTimeInNs/10**9
         meal_carbs = 0
 
-        # Main loop to simulate insulin delivery
-        while timestep <= self.sim_time: 
-            glucose = random.uniform(70, 180)
+        # If the timestep is valid (within simulation time range)
+        if timestep <= self.sim_time: 
 
             # Skip delivery if glucose is not valid
-            if not self.should_deliver_insulin(glucose):
-                self.maintain_previous()
-                timestep += 1
-                continue
+            if self.should_deliver_insulin(glucose):
 
-            # Get the scheduled meal carbs 10 minutes before meal
-            meal_carbs = self.meal_schedule.get(timestep - 20, 0)
-            give_bolus = meal_carbs > 0
-            give_basal = timestep == self.state["next_basal_timestep"] and not give_bolus
+              # Get the scheduled meal carbs 10 minutes before meal
+              meal_carbs = self.meal_schedule.get(timestep - 20, 0)
+              give_bolus = meal_carbs > 0
+              give_basal = timestep == self.state["next_basal_timestep"] and not give_bolus
 
-            # Handle bolus delivery if applicable
-            if give_bolus:
-                total_bolus = self.calculate_bolus(glucose, meal_carbs, timestep)
-                self.state["bolus_insulin"].append(total_bolus)
-                self.state["carb_intake"].append(meal_carbs)
-                self.state["infusion_values"].append(total_bolus)
-                if self.state["next_basal_timestep"] == timestep:
-                    self.state["next_basal_timestep"] = timestep + 1
+              # Handle bolus delivery if applicable
+              if give_bolus:
+                  total_bolus = self.calculate_bolus(glucose, meal_carbs, timestep)
+                  self.state["bolus_insulin"].append(total_bolus)
+                  self.state["carb_intake"].append(meal_carbs)
+                  self.state["infusion_values"].append(total_bolus)
+                  if self.state["next_basal_timestep"] == timestep:
+                      self.state["next_basal_timestep"] = timestep + 1
 
-            # Handle basal delivery if applicable
-            elif give_basal:
-                rate = self.predict_insulin_dosage(glucose, timestep)
-                rate = self.update_basal_tracker(timestep, rate)
-                self.state["basal_rates"].append(rate)
-                self.state["infusion_values"].append(rate)
-                self.state["next_basal_timestep"] = timestep + 15
-                self.state["bolus_insulin"].append(0)
-                self.state["carb_intake"].append(0)
+              # Handle basal delivery if applicable
+              elif give_basal:
+                  rate = self.predict_insulin_dosage(glucose, timestep)
+                  rate = self.update_basal_tracker(timestep, rate)
+                  self.state["basal_rates"].append(rate)
+                  self.state["infusion_values"].append(rate)
+                  self.state["next_basal_timestep"] = timestep + 15
+                  self.state["bolus_insulin"].append(0)
+                  self.state["carb_intake"].append(0)
 
             # Maintain previous basal if no bolus or basal delivered
             else:
                 self.maintain_previous()
-
-            timestep += 1
 
     def maintain_previous(self):
         """Maintain the previous basal if no bolus or basal was delivered."""
@@ -333,6 +342,11 @@ class InsulinSimulator:
 if __name__ == "__main__":
     model_path = 'PID-Model-Optimization/opt_pid_tuning_model_2.h5'
     test_case_path = 'PID-Model-Optimization/TestCases.txt'
-    sim = InsulinSimulator(model_path, test_case_path)
-    sim.run()
+    totalSimulationTimeInNs = 3500000000000
+    sim = InsulinSimulator(model_path, test_case_path, totalSimulationTimeInNs)
+    
+    glucose = random.uniform(70, 180) 
+    currentTimeInNs = 1000000000  
+    sim.run(glucose, currentTimeInNs)
+    
     sim.print_summary()
