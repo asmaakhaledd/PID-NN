@@ -223,14 +223,14 @@ class InsulinSimulator:
             float: The total bolus insulin required for the meal.
         """
         TDI = self.state["TDI"]
-        correction_factor = 1500 / TDI  # Correction factor based on TDI
+        correction_factor = 1800 / TDI  # Correction factor based on TDI
         correction_dose = max(0, (glucose - target_glucose) / correction_factor)  # Correction dose if glucose is high
         carb_ratio = 500 / TDI  # Carb-to-insulin ratio
-        meal_dose = meal_carbs / carb_ratio  # Calculate the bolus insulin for the meal
-        total_bolus = max(0.5, min(meal_dose + correction_dose, 10.0))  # Limit bolus to a safe range
+        meal_dose = (meal_carbs / carb_ratio) * 60  # Calculate the bolus insulin for the meal
+        total_bolus = meal_dose + correction_dose  
 
         # Print bolus calculation details
-        print(f"Timestep: {timestep}, Glucose: {glucose:.2f} mg/dL, Bolus for meal: {meal_dose:.2f} units, Correction dose: {correction_dose:.2f} units, Total bolus: {total_bolus:.2f} units")
+        print(f"Timestep: {timestep}, Glucose: {glucose:.2f} mg/dL, Carbs:{meal_carbs}, Bolus for meal: {meal_dose:.2f} units/hr, Correction dose: {correction_dose:.2f} units, Total bolus: {total_bolus:.2f} units/hr")
 
         return total_bolus
 
@@ -285,7 +285,7 @@ class InsulinSimulator:
                 continue
 
             # Get the scheduled meal carbs 10 minutes before meal
-            meal_carbs = self.meal_schedule.get(timestep + 10, 0)
+            meal_carbs = self.meal_schedule.get(timestep - 20, 0)
             give_bolus = meal_carbs > 0
             give_basal = timestep == self.state["next_basal_timestep"] and not give_bolus
 
