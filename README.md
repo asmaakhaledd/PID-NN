@@ -1,4 +1,4 @@
-# Artificial Pancreas: A Digital Twin for Personalized Type-1 Diabetes Care
+# A Digital Twin for Personalized Type-1 Diabetes Care
 
 This project implements a **Digital Twin** system for optimizing insulin delivery in **Type-1 Diabetes (T1D)** patients. It leverages an **LSTM-based PID tuning model** trained on real glucose data and simulates a closed-loop insulin pump. The system supports real-time testing using predefined patient scenarios and can be deployed on embedded hardware (Jetson TX2) for Hardware-in-the-Loop (HIL) testing.
 
